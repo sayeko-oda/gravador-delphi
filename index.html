@@ -220,6 +220,10 @@
       Pronto para gravar
     </div>
 
+    <p style="margin: 8px 0 14px; font-size: 0.95rem;">
+      <strong>Tempo máximo de gravação: 5 minutos.</strong>
+    </p>
+
     <div id="tempo" class="tempo" style="display:none;">
       00:00
     </div>
@@ -277,6 +281,7 @@
 
   let segundosGravados = 0;
   let timer = null;
+  const LIMITE_GRAVACAO_SEGUNDOS = 5 * 60;
 
   const btnGravar =
     document.getElementById('btnGravar');
@@ -355,6 +360,18 @@
     timer = setInterval(function() {
       segundosGravados++;
       atualizarTempo();
+
+      if (
+        segundosGravados >=
+        LIMITE_GRAVACAO_SEGUNDOS
+      ) {
+        pararCronometro();
+
+        statusEl.textContent =
+          'Tempo máximo de 5 minutos atingido. Finalizando gravação...';
+
+        pararGravacao();
+      }
     }, 1000);
   }
 
@@ -858,7 +875,7 @@
           } catch (e) {}
 
           window.close();
-        }, 40);
+        }, 4000);
 
       } else {
 
