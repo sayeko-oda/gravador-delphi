@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Comentário complementar em áudio</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      color-scheme: light;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px;
+      background: #f5f6fa;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #252525;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 620px;
+      background: #ffffff;
+      border-radius: 18px;
+      padding: 32px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.10);
+    }
+
+    h1 {
+      color: #22238f;
+      font-size: 26px;
+      line-height: 1.25;
+      margin: 0 0 16px;
+    }
+
+    p {
+      font-size: 17px;
+      line-height: 1.55;
+      margin: 0 0 18px;
+    }
+
+    .observacao {
+      background: #f4f7ff;
+      border-left: 4px solid #2f85d1;
+      padding: 14px 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .gravador {
+      text-align: center;
+      padding-top: 8px;
+    }
+
+    .status {
+      min-height: 28px;
+      margin: 14px 0 20px;
+      font-size: 17px;
+      font-weight: 700;
+      color: #22238f;
+    }
+
+    .tempo {
+      font-size: 30px;
+      font-weight: 700;
+      margin: 10px 0 20px;
+      color: #22238f;
+    }
+
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-top: 10px;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    #btnGravar {
+      background: #22238f;
+      color: white;
+    }
+
+    #btnParar {
+      background: #f2a400;
+      color: #222222;
+    }
+
+    #btnNova {
+      background: #eeeeee;
+      color: #22238f;
+    }
+
+    .audio-box {
+      margin-top: 22px;
+      padding-top: 22px;
+      border-top: 1px solid #dddddd;
+    }
+
+    audio {
+      width: 100%;
+      margin: 10px 0;
+    }
+
+    .erro {
+      background: #fff1f1;
+      color: #a30000;
+      padding: 14px;
+      border-radius: 10px;
+      margin-top: 18px;
+      line-height: 1.45;
+      display: none;
+    }
+
+    .sucesso {
+      background: #eef9f0;
+      padding: 14px;
+      border-radius: 10px;
+      margin-top: 18px;
+      line-height: 1.45;
+      display: none;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 14px;
+        align-items: flex-start;
+      }
+
+      .card {
+        margin-top: 18px;
+        padding: 24px 20px;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      p {
+        font-size: 17px;
+      }
+
+      button {
+        min-height: 58px;
+        font-size: 18px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="card">
+
+  <h1>Comentário complementar em áudio</h1>
+
+  <p>
+    Se desejar complementar suas respostas, você pode gravar um áudio
+    com observações adicionais sobre os indicadores avaliados.
+  </p>
+
+  <div class="observacao">
+    Este espaço é opcional e serve apenas para comentários adicionais.
+    O áudio não substitui as avaliações, sugestões de redação ou
+    comentários registrados anteriormente.
+  </div>
+
+  <div class="gravador">
+
+    <button id="btnGravar" type="button">
+      🎙 Gravar comentário em áudio
+    </button>
+
+    <div id="status" class="status">
+      Pronto para gravar
+    </div>
+
+    <div id="tempo" class="tempo" style="display:none;">
+      00:00
+    </div>
+
+    <button id="btnParar" type="button" style="display:none;">
+      ⏹ Parar gravação
+    </button>
+
+    <div id="audioBox" class="audio-box" style="display:none;">
+
+      <p><strong>Ouça sua gravação:</strong></p>
+
+      <audio id="audio" controls></audio>
+
+      <button id="btnNova" type="button">
+        🔄 Gravar novamente
+      </button>
+
+    </div>
+
+    <div id="erro" class="erro"></div>
+
+    <div id="sucesso" class="sucesso">
+      ✓ Gravação realizada.
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+  let stream = null;
+  let mediaRecorder = null;
+  let partes = [];
+  let audioBlob = null;
+
+  let inicioGravacao = null;
+  let timer = null;
+
+  const btnGravar = document.getElementById('btnGravar');
+  const btnParar = document.getElementById('btnParar');
+  const btnNova = document.getElementById('btnNova');
+
+  const statusEl = document.getElementById('status');
+  const tempoEl = document.getElementById('tempo');
+  const audioBox = document.getElementById('audioBox');
+  const audio = document.getElementById('audio');
+  const erro = document.getElementById('erro');
+  const sucesso = document.getElementById('sucesso');
+
+
+  function mostrarErro(mensagem) {
+    erro.textContent = mensagem;
+    erro.style.display = 'block';
+  }
+
+
+  function limparErro() {
+    erro.textContent = '';
+    erro.style.display = 'none';
+  }
+
+
+  function atualizarTempo() {
+
+    if (!inicioGravacao) return;
+
+    const segundos =
+      Math.floor((Date.now() - inicioGravacao) / 1000);
+
+    const minutos =
+      String(Math.floor(segundos / 60)).padStart(2, '0');
+
+    const resto =
+      String(segundos % 60).padStart(2, '0');
+
+    tempoEl.textContent =
+      minutos + ':' + resto;
+  }
+
+
+  function pararStream() {
+
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      stream = null;
+    }
+
+  }
+
+
+  async function iniciarGravacao() {
+
+    limparErro();
+
+    sucesso.style.display = 'none';
+    audioBox.style.display = 'none';
+
+    if (
+      !navigator.mediaDevices ||
+      !navigator.mediaDevices.getUserMedia
+    ) {
+      mostrarErro(
+        'Este navegador não oferece suporte à gravação de áudio.'
+      );
+      return;
+    }
+
+    if (typeof MediaRecorder === 'undefined') {
+      mostrarErro(
+        'A gravação de áudio não é suportada neste navegador.'
+      );
+      return;
+    }
+
+    try {
+
+      /*
+       * É NESTE MOMENTO que o navegador deverá
+       * solicitar autorização para usar o microfone.
+       */
+      stream =
+        await navigator.mediaDevices.getUserMedia({
+          audio: true
+        });
+
+      partes = [];
+
+      let opcoes = {};
+
+      if (
+        MediaRecorder.isTypeSupported &&
+        MediaRecorder.isTypeSupported(
+          'audio/webm;codecs=opus'
+        )
+      ) {
+        opcoes.mimeType =
+          'audio/webm;codecs=opus';
+      }
+
+      mediaRecorder =
+        new MediaRecorder(stream, opcoes);
+
+
+      mediaRecorder.ondataavailable = function(event) {
+
+        if (
+          event.data &&
+          event.data.size > 0
+        ) {
+          partes.push(event.data);
+        }
+
+      };
+
+
+      mediaRecorder.onstop = function() {
+
+        clearInterval(timer);
+
+        const tipo =
+          mediaRecorder.mimeType ||
+          'audio/webm';
+
+        audioBlob =
+          new Blob(partes, {
+            type: tipo
+          });
+
+        const url =
+          URL.createObjectURL(audioBlob);
+
+        audio.src = url;
+
+        audioBox.style.display = 'block';
+        sucesso.style.display = 'block';
+
+        statusEl.textContent =
+          'Gravação concluída';
+
+        tempoEl.style.display = 'none';
+
+        btnGravar.style.display = 'none';
+        btnParar.style.display = 'none';
+
+        pararStream();
+      };
+
+
+      mediaRecorder.start();
+
+      inicioGravacao = Date.now();
+
+      tempoEl.textContent = '00:00';
+      tempoEl.style.display = 'block';
+
+      statusEl.textContent =
+        '🔴 Gravando...';
+
+      btnGravar.style.display = 'none';
+      btnParar.style.display = 'block';
+
+      timer =
+        setInterval(
+          atualizarTempo,
+          500
+        );
+
+    }
+    catch (e) {
+
+      pararStream();
+
+      if (
+        e &&
+        (
+          e.name === 'NotAllowedError' ||
+          e.name === 'PermissionDeniedError'
+        )
+      ) {
+        mostrarErro(
+          'O acesso ao microfone não foi autorizado. ' +
+          'Permita o uso do microfone no navegador e tente novamente.'
+        );
+      }
+      else {
+        mostrarErro(
+          'Não foi possível acessar o microfone. ' +
+          'Verifique as permissões do navegador e tente novamente.'
+        );
+      }
+
+    }
+
+  }
+
+
+  function pararGravacao() {
+
+    if (
+      mediaRecorder &&
+      mediaRecorder.state !== 'inactive'
+    ) {
+      mediaRecorder.stop();
+    }
+
+  }
+
+
+  function gravarNovamente() {
+
+    pararStream();
+
+    if (audio.src) {
+      URL.revokeObjectURL(audio.src);
+    }
+
+    audio.removeAttribute('src');
+    audio.load();
+
+    audioBlob = null;
+    partes = [];
+
+    audioBox.style.display = 'none';
+    sucesso.style.display = 'none';
+    tempoEl.style.display = 'none';
+
+    statusEl.textContent =
+      'Pronto para gravar';
+
+    btnParar.style.display = 'none';
+    btnGravar.style.display = 'block';
+
+    limparErro();
+  }
+
+
+  btnGravar.addEventListener(
+    'click',
+    iniciarGravacao
+  );
+
+  btnParar.addEventListener(
+    'click',
+    pararGravacao
+  );
+
+  btnNova.addEventListener(
+    'click',
+    gravarNovamente
+  );
+
+
+  window.addEventListener(
+    'beforeunload',
+    pararStream
+  );
+</script>
+
+</body>
+</html>
