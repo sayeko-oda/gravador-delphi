@@ -262,9 +262,7 @@
 
     <div id="erro" class="erro"></div>
 
-    <div id="sucesso" class="sucesso">
-      ✓ Gravação realizada.
-    </div>
+    <div id="sucesso" class="sucesso"></div>
 
   </div>
 
@@ -479,7 +477,7 @@
           audio.src = audioUrl;
 
           audioBox.style.display = 'block';
-          sucesso.style.display = 'block';
+          sucesso.style.display = 'none';
 
           statusEl.textContent =
             'Gravação concluída';
