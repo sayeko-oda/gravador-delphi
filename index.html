@@ -120,6 +120,12 @@
       color: #9b1c1c;
     }
 
+    #btnEnviar {
+      background: #22238f;
+      color: white;
+      margin-top: 18px;
+    }
+
     .botoes-gravacao {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -248,6 +254,10 @@
         🗑 Excluir gravação
       </button>
 
+      <button id="btnEnviar" type="button">
+        ✓ Salvar comentário em áudio
+      </button>
+
     </div>
 
     <div id="erro" class="erro"></div>
@@ -263,13 +273,7 @@
 <script>
   let stream = null;
   let mediaRecorder = null;
-
-  /*
-   * Todos os pedaços recebidos do MediaRecorder ficam aqui.
-   * Eles NÃO são apagados ao pausar ou continuar.
-   */
   let partes = [];
-
   let audioBlob = null;
   let audioUrl = null;
 
@@ -290,6 +294,9 @@
 
   const btnExcluir =
     document.getElementById('btnExcluir');
+
+  const btnEnviar =
+    document.getElementById('btnEnviar');
 
   const statusEl =
     document.getElementById('status');
@@ -419,12 +426,7 @@
           audio: true
         });
 
-      /*
-       * A lista é zerada somente quando começa
-       * uma gravação totalmente nova.
-       */
       partes = [];
-
       segundosGravados = 0;
       atualizarTempo();
 
@@ -451,10 +453,6 @@
             event.data &&
             event.data.size > 0
           ) {
-            /*
-             * Cada bloco é acrescentado.
-             * Nunca substituímos o bloco anterior.
-             */
             partes.push(event.data);
           }
 
@@ -470,10 +468,6 @@
             mediaRecorder.mimeType ||
             'audio/webm';
 
-          /*
-           * Todos os blocos — antes e depois
-           * das pausas — formam um único áudio.
-           */
           audioBlob =
             new Blob(partes, {
               type: tipo
@@ -502,12 +496,7 @@
         };
 
 
-      /*
-       * Solicita um bloco de dados aproximadamente
-       * a cada segundo. Isso ajuda a preservar
-       * os dados produzidos antes de cada pausa.
-       */
-      mediaRecorder.start(1000);
+      mediaRecorder.start();
 
       statusEl.textContent =
         '🔴 Gravando...';
@@ -564,18 +553,6 @@
 
     if (mediaRecorder.state === 'recording') {
 
-      /*
-       * Antes de pausar, pedimos explicitamente
-       * que o navegador entregue os dados
-       * acumulados até este momento.
-       */
-      try {
-        mediaRecorder.requestData();
-      }
-      catch (e) {
-        // Alguns navegadores podem ignorar requestData.
-      }
-
       mediaRecorder.pause();
 
       pararCronometro();
@@ -616,20 +593,6 @@
         mediaRecorder.state === 'paused'
       )
     ) {
-
-      /*
-       * Se estiver gravando, solicitamos o último
-       * bloco antes de encerrar.
-       */
-      if (mediaRecorder.state === 'recording') {
-        try {
-          mediaRecorder.requestData();
-        }
-        catch (e) {
-          // O stop ainda entregará o bloco final.
-        }
-      }
-
       mediaRecorder.stop();
     }
 
@@ -674,6 +637,218 @@
     statusEl.textContent =
       'Gravação excluída. Você pode gravar novamente.';
   }
+
+
+  function obterIdResposta() {
+    const parametros =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    return String(
+      parametros.get('idResposta') ||
+      ''
+    ).trim();
+  }
+
+
+  function blobParaBase64(blob) {
+    return new Promise(function(resolve, reject) {
+      const leitor =
+        new FileReader();
+
+      leitor.onloadend =
+        function() {
+          const resultado =
+            String(
+              leitor.result ||
+              ''
+            );
+
+          const separador =
+            resultado.indexOf(',');
+
+          if (separador < 0) {
+            reject(
+              new Error(
+                'Não foi possível preparar o áudio para envio.'
+              )
+            );
+            return;
+          }
+
+          resolve(
+            resultado.substring(
+              separador + 1
+            )
+          );
+        };
+
+      leitor.onerror =
+        function() {
+          reject(
+            new Error(
+              'Não foi possível ler a gravação.'
+            )
+          );
+        };
+
+      leitor.readAsDataURL(
+        blob
+      );
+    });
+  }
+
+
+  async function enviarGravacao() {
+
+    limparErro();
+
+    if (!audioBlob) {
+      mostrarErro(
+        'Grave um áudio antes de salvar.'
+      );
+      return;
+    }
+
+    const idResposta =
+      obterIdResposta();
+
+    if (!idResposta) {
+      mostrarErro(
+        'Não foi possível identificar esta avaliação. Feche esta página e abra o gravador novamente pelo questionário.'
+      );
+      return;
+    }
+
+    if (
+      !window.opener ||
+      window.opener.closed
+    ) {
+      mostrarErro(
+        'A página da pesquisa não está disponível. Volte ao questionário e abra o gravador novamente.'
+      );
+      return;
+    }
+
+    btnEnviar.disabled = true;
+    btnNova.disabled = true;
+    btnExcluir.disabled = true;
+
+    btnEnviar.textContent =
+      'Salvando áudio...';
+
+    sucesso.style.display =
+      'none';
+
+    statusEl.textContent =
+      'Enviando gravação para a pesquisa...';
+
+    try {
+
+      const base64 =
+        await blobParaBase64(
+          audioBlob
+        );
+
+      window.opener.postMessage(
+        {
+          tipo:
+            'AUDIO_COMPLEMENTAR',
+          idResposta:
+            idResposta,
+          mimeType:
+            audioBlob.type ||
+            'audio/webm',
+          base64:
+            base64
+        },
+        '*'
+      );
+
+    }
+    catch (e) {
+
+      btnEnviar.disabled = false;
+      btnNova.disabled = false;
+      btnExcluir.disabled = false;
+
+      btnEnviar.textContent =
+        '✓ Salvar comentário em áudio';
+
+      statusEl.textContent =
+        'Gravação concluída';
+
+      mostrarErro(
+        e && e.message
+          ? e.message
+          : 'Não foi possível enviar a gravação.'
+      );
+    }
+  }
+
+
+  window.addEventListener(
+    'message',
+    function(event) {
+
+      const dados =
+        event.data;
+
+      if (
+        !dados ||
+        dados.tipo !==
+          'AUDIO_COMPLEMENTAR_SALVO' ||
+        String(
+          dados.idResposta ||
+          ''
+        ) !==
+          obterIdResposta()
+      ) {
+        return;
+      }
+
+      btnEnviar.disabled = false;
+      btnNova.disabled = false;
+      btnExcluir.disabled = false;
+
+      btnEnviar.textContent =
+        '✓ Salvar comentário em áudio';
+
+      if (dados.sucesso) {
+
+        limparErro();
+
+        sucesso.textContent =
+          '✓ Comentário em áudio salvo com sucesso.';
+
+        sucesso.style.display =
+          'block';
+
+        statusEl.textContent =
+          'Áudio registrado na pesquisa';
+
+      } else {
+
+        sucesso.style.display =
+          'none';
+
+        statusEl.textContent =
+          'Gravação concluída';
+
+        mostrarErro(
+          dados.mensagem ||
+          'Não foi possível salvar o áudio. Tente novamente.'
+        );
+      }
+    }
+  );
+
+
+  btnEnviar.addEventListener(
+    'click',
+    enviarGravacao
+  );
 
 
   btnGravar.addEventListener(
