@@ -752,7 +752,7 @@
       window.opener.postMessage(
         {
           tipo:
-            'AUDIO_COMPLEMENTAR',
+            'DELPHI_AUDIO_SALVAR',
           idResposta:
             idResposta,
           mimeType:
@@ -793,15 +793,29 @@
       const dados =
         event.data;
 
+      if (!dados) {
+        return;
+      }
+
       if (
-        !dados ||
-        dados.tipo !==
-          'AUDIO_COMPLEMENTAR_SALVO' ||
+        String(
+          dados.idResposta ||
+          ''
+        ) &&
         String(
           dados.idResposta ||
           ''
         ) !==
           obterIdResposta()
+      ) {
+        return;
+      }
+
+      if (
+        dados.tipo !==
+          'DELPHI_AUDIO_SALVO' &&
+        dados.tipo !==
+          'DELPHI_AUDIO_ERRO'
       ) {
         return;
       }
@@ -813,7 +827,10 @@
       btnEnviar.textContent =
         '✓ Salvar comentário em áudio';
 
-      if (dados.sucesso) {
+      if (
+        dados.tipo ===
+          'DELPHI_AUDIO_SALVO'
+      ) {
 
         limparErro();
 
