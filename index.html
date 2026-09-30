@@ -263,7 +263,13 @@
 <script>
   let stream = null;
   let mediaRecorder = null;
+
+  /*
+   * Todos os pedaços recebidos do MediaRecorder ficam aqui.
+   * Eles NÃO são apagados ao pausar ou continuar.
+   */
   let partes = [];
+
   let audioBlob = null;
   let audioUrl = null;
 
@@ -413,7 +419,12 @@
           audio: true
         });
 
+      /*
+       * A lista é zerada somente quando começa
+       * uma gravação totalmente nova.
+       */
       partes = [];
+
       segundosGravados = 0;
       atualizarTempo();
 
@@ -440,6 +451,10 @@
             event.data &&
             event.data.size > 0
           ) {
+            /*
+             * Cada bloco é acrescentado.
+             * Nunca substituímos o bloco anterior.
+             */
             partes.push(event.data);
           }
 
@@ -455,6 +470,10 @@
             mediaRecorder.mimeType ||
             'audio/webm';
 
+          /*
+           * Todos os blocos — antes e depois
+           * das pausas — formam um único áudio.
+           */
           audioBlob =
             new Blob(partes, {
               type: tipo
@@ -483,7 +502,12 @@
         };
 
 
-      mediaRecorder.start();
+      /*
+       * Solicita um bloco de dados aproximadamente
+       * a cada segundo. Isso ajuda a preservar
+       * os dados produzidos antes de cada pausa.
+       */
+      mediaRecorder.start(1000);
 
       statusEl.textContent =
         '🔴 Gravando...';
@@ -540,6 +564,18 @@
 
     if (mediaRecorder.state === 'recording') {
 
+      /*
+       * Antes de pausar, pedimos explicitamente
+       * que o navegador entregue os dados
+       * acumulados até este momento.
+       */
+      try {
+        mediaRecorder.requestData();
+      }
+      catch (e) {
+        // Alguns navegadores podem ignorar requestData.
+      }
+
       mediaRecorder.pause();
 
       pararCronometro();
@@ -580,6 +616,20 @@
         mediaRecorder.state === 'paused'
       )
     ) {
+
+      /*
+       * Se estiver gravando, solicitamos o último
+       * bloco antes de encerrar.
+       */
+      if (mediaRecorder.state === 'recording') {
+        try {
+          mediaRecorder.requestData();
+        }
+        catch (e) {
+          // O stop ainda entregará o bloco final.
+        }
+      }
+
       mediaRecorder.stop();
     }
 
