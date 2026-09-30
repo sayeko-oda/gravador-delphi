@@ -843,6 +843,23 @@
         statusEl.textContent =
           'Áudio registrado na pesquisa';
 
+        /*
+          Depois da confirmação do Google Apps Script,
+          devolve o foco ao questionário e fecha o gravador.
+        */
+        setTimeout(function() {
+          try {
+            if (
+              window.opener &&
+              !window.opener.closed
+            ) {
+              window.opener.focus();
+            }
+          } catch (e) {}
+
+          window.close();
+        }, 10000);
+
       } else {
 
         sucesso.style.display =
