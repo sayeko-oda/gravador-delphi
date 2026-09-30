@@ -66,7 +66,7 @@
 
     .status {
       min-height: 28px;
-      margin: 14px 0 20px;
+      margin: 14px 0 12px;
       font-size: 17px;
       font-weight: 700;
       color: #22238f;
@@ -90,19 +90,40 @@
       cursor: pointer;
     }
 
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
     #btnGravar {
       background: #22238f;
       color: white;
     }
 
-    #btnParar {
+    #btnPausar {
       background: #f2a400;
       color: #222222;
+    }
+
+    #btnParar {
+      background: #22238f;
+      color: white;
     }
 
     #btnNova {
       background: #eeeeee;
       color: #22238f;
+    }
+
+    #btnExcluir {
+      background: #fff1f1;
+      color: #9b1c1c;
+    }
+
+    .botoes-gravacao {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
     }
 
     .audio-box {
@@ -158,6 +179,10 @@
         min-height: 58px;
         font-size: 18px;
       }
+
+      .botoes-gravacao {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -193,18 +218,34 @@
       00:00
     </div>
 
-    <button id="btnParar" type="button" style="display:none;">
-      ⏹ Parar gravação
-    </button>
+    <div
+      id="controlesGravacao"
+      class="botoes-gravacao"
+      style="display:none;"
+    >
+      <button id="btnPausar" type="button">
+        ⏸ Pausar gravação
+      </button>
+
+      <button id="btnParar" type="button">
+        ⏹ Encerrar gravação
+      </button>
+    </div>
 
     <div id="audioBox" class="audio-box" style="display:none;">
 
-      <p><strong>Ouça sua gravação:</strong></p>
+      <p>
+        <strong>Ouça sua gravação:</strong>
+      </p>
 
       <audio id="audio" controls></audio>
 
       <button id="btnNova" type="button">
         🔄 Gravar novamente
+      </button>
+
+      <button id="btnExcluir" type="button">
+        🗑 Excluir gravação
       </button>
 
     </div>
@@ -224,20 +265,46 @@
   let mediaRecorder = null;
   let partes = [];
   let audioBlob = null;
+  let audioUrl = null;
 
-  let inicioGravacao = null;
+  let segundosGravados = 0;
   let timer = null;
 
-  const btnGravar = document.getElementById('btnGravar');
-  const btnParar = document.getElementById('btnParar');
-  const btnNova = document.getElementById('btnNova');
+  const btnGravar =
+    document.getElementById('btnGravar');
 
-  const statusEl = document.getElementById('status');
-  const tempoEl = document.getElementById('tempo');
-  const audioBox = document.getElementById('audioBox');
-  const audio = document.getElementById('audio');
-  const erro = document.getElementById('erro');
-  const sucesso = document.getElementById('sucesso');
+  const btnPausar =
+    document.getElementById('btnPausar');
+
+  const btnParar =
+    document.getElementById('btnParar');
+
+  const btnNova =
+    document.getElementById('btnNova');
+
+  const btnExcluir =
+    document.getElementById('btnExcluir');
+
+  const statusEl =
+    document.getElementById('status');
+
+  const tempoEl =
+    document.getElementById('tempo');
+
+  const controlesGravacao =
+    document.getElementById('controlesGravacao');
+
+  const audioBox =
+    document.getElementById('audioBox');
+
+  const audio =
+    document.getElementById('audio');
+
+  const erro =
+    document.getElementById('erro');
+
+  const sucesso =
+    document.getElementById('sucesso');
 
 
   function mostrarErro(mensagem) {
@@ -252,37 +319,72 @@
   }
 
 
-  function atualizarTempo() {
-
-    if (!inicioGravacao) return;
+  function formatarTempo(totalSegundos) {
+    const minutos =
+      String(Math.floor(totalSegundos / 60))
+        .padStart(2, '0');
 
     const segundos =
-      Math.floor((Date.now() - inicioGravacao) / 1000);
+      String(totalSegundos % 60)
+        .padStart(2, '0');
 
-    const minutos =
-      String(Math.floor(segundos / 60)).padStart(2, '0');
+    return minutos + ':' + segundos;
+  }
 
-    const resto =
-      String(segundos % 60).padStart(2, '0');
 
+  function atualizarTempo() {
     tempoEl.textContent =
-      minutos + ':' + resto;
+      formatarTempo(segundosGravados);
+  }
+
+
+  function iniciarCronometro() {
+    pararCronometro();
+
+    timer = setInterval(function() {
+      segundosGravados++;
+      atualizarTempo();
+    }, 1000);
+  }
+
+
+  function pararCronometro() {
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
   }
 
 
   function pararStream() {
-
     if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach(function(track) {
+        track.stop();
+      });
+
       stream = null;
     }
+  }
 
+
+  function limparAudioAnterior() {
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+      audioUrl = null;
+    }
+
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+
+    audioBlob = null;
   }
 
 
   async function iniciarGravacao() {
 
     limparErro();
+    limparAudioAnterior();
 
     sucesso.style.display = 'none';
     audioBox.style.display = 'none';
@@ -306,16 +408,14 @@
 
     try {
 
-      /*
-       * É NESTE MOMENTO que o navegador deverá
-       * solicitar autorização para usar o microfone.
-       */
       stream =
         await navigator.mediaDevices.getUserMedia({
           audio: true
         });
 
       partes = [];
+      segundosGravados = 0;
+      atualizarTempo();
 
       let opcoes = {};
 
@@ -333,73 +433,79 @@
         new MediaRecorder(stream, opcoes);
 
 
-      mediaRecorder.ondataavailable = function(event) {
+      mediaRecorder.ondataavailable =
+        function(event) {
 
-        if (
-          event.data &&
-          event.data.size > 0
-        ) {
-          partes.push(event.data);
-        }
+          if (
+            event.data &&
+            event.data.size > 0
+          ) {
+            partes.push(event.data);
+          }
 
-      };
+        };
 
 
-      mediaRecorder.onstop = function() {
+      mediaRecorder.onstop =
+        function() {
 
-        clearInterval(timer);
+          pararCronometro();
 
-        const tipo =
-          mediaRecorder.mimeType ||
-          'audio/webm';
+          const tipo =
+            mediaRecorder.mimeType ||
+            'audio/webm';
 
-        audioBlob =
-          new Blob(partes, {
-            type: tipo
-          });
+          audioBlob =
+            new Blob(partes, {
+              type: tipo
+            });
 
-        const url =
-          URL.createObjectURL(audioBlob);
+          audioUrl =
+            URL.createObjectURL(audioBlob);
 
-        audio.src = url;
+          audio.src = audioUrl;
 
-        audioBox.style.display = 'block';
-        sucesso.style.display = 'block';
+          audioBox.style.display = 'block';
+          sucesso.style.display = 'block';
 
-        statusEl.textContent =
-          'Gravação concluída';
+          statusEl.textContent =
+            'Gravação concluída';
 
-        tempoEl.style.display = 'none';
+          tempoEl.style.display = 'none';
 
-        btnGravar.style.display = 'none';
-        btnParar.style.display = 'none';
+          controlesGravacao.style.display =
+            'none';
 
-        pararStream();
-      };
+          btnGravar.style.display =
+            'none';
+
+          pararStream();
+        };
 
 
       mediaRecorder.start();
 
-      inicioGravacao = Date.now();
-
-      tempoEl.textContent = '00:00';
-      tempoEl.style.display = 'block';
-
       statusEl.textContent =
         '🔴 Gravando...';
 
-      btnGravar.style.display = 'none';
-      btnParar.style.display = 'block';
+      tempoEl.style.display =
+        'block';
 
-      timer =
-        setInterval(
-          atualizarTempo,
-          500
-        );
+      controlesGravacao.style.display =
+        'grid';
+
+      btnGravar.style.display =
+        'none';
+
+      btnPausar.textContent =
+        '⏸ Pausar gravação';
+
+      iniciarCronometro();
 
     }
     catch (e) {
 
+      pararCronometro();
       pararStream();
 
       if (
@@ -426,11 +532,53 @@
   }
 
 
+  function pausarOuContinuar() {
+
+    if (!mediaRecorder) {
+      return;
+    }
+
+    if (mediaRecorder.state === 'recording') {
+
+      mediaRecorder.pause();
+
+      pararCronometro();
+
+      statusEl.textContent =
+        '⏸ Gravação pausada — ' +
+        formatarTempo(segundosGravados);
+
+      btnPausar.textContent =
+        '▶ Continuar gravação';
+
+      return;
+    }
+
+
+    if (mediaRecorder.state === 'paused') {
+
+      mediaRecorder.resume();
+
+      statusEl.textContent =
+        '🔴 Gravando...';
+
+      btnPausar.textContent =
+        '⏸ Pausar gravação';
+
+      iniciarCronometro();
+    }
+
+  }
+
+
   function pararGravacao() {
 
     if (
       mediaRecorder &&
-      mediaRecorder.state !== 'inactive'
+      (
+        mediaRecorder.state === 'recording' ||
+        mediaRecorder.state === 'paused'
+      )
     ) {
       mediaRecorder.stop();
     }
@@ -438,31 +586,43 @@
   }
 
 
-  function gravarNovamente() {
+  function prepararNovaGravacao() {
 
+    pararCronometro();
     pararStream();
+    limparAudioAnterior();
 
-    if (audio.src) {
-      URL.revokeObjectURL(audio.src);
-    }
-
-    audio.removeAttribute('src');
-    audio.load();
-
-    audioBlob = null;
     partes = [];
+    segundosGravados = 0;
 
-    audioBox.style.display = 'none';
-    sucesso.style.display = 'none';
-    tempoEl.style.display = 'none';
+    audioBox.style.display =
+      'none';
+
+    sucesso.style.display =
+      'none';
+
+    tempoEl.style.display =
+      'none';
+
+    controlesGravacao.style.display =
+      'none';
 
     statusEl.textContent =
       'Pronto para gravar';
 
-    btnParar.style.display = 'none';
-    btnGravar.style.display = 'block';
+    btnGravar.style.display =
+      'block';
 
     limparErro();
+  }
+
+
+  function excluirGravacao() {
+
+    prepararNovaGravacao();
+
+    statusEl.textContent =
+      'Gravação excluída. Você pode gravar novamente.';
   }
 
 
@@ -471,20 +631,38 @@
     iniciarGravacao
   );
 
+
+  btnPausar.addEventListener(
+    'click',
+    pausarOuContinuar
+  );
+
+
   btnParar.addEventListener(
     'click',
     pararGravacao
   );
 
+
   btnNova.addEventListener(
     'click',
-    gravarNovamente
+    prepararNovaGravacao
+  );
+
+
+  btnExcluir.addEventListener(
+    'click',
+    excluirGravacao
   );
 
 
   window.addEventListener(
     'beforeunload',
-    pararStream
+    function() {
+      pararCronometro();
+      pararStream();
+      limparAudioAnterior();
+    }
   );
 </script>
 
