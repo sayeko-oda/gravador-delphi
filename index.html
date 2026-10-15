@@ -281,6 +281,8 @@
 
   let segundosGravados = 0;
   let timer = null;
+  let timeoutEnvio = null;
+  const LIMITE_ENVIO_MS = 90000;
   const LIMITE_GRAVACAO_SEGUNDOS = 5 * 60;
 
   const btnGravar =
@@ -781,6 +783,18 @@
         '*'
       );
 
+      timeoutEnvio = setTimeout(function() {
+        btnEnviar.disabled = false;
+        btnNova.disabled = false;
+        btnExcluir.disabled = false;
+        btnEnviar.textContent = '✓ Salvar comentário em áudio';
+        statusEl.textContent = 'Gravação concluída';
+        mostrarErro(
+          'O salvamento está demorando mais que o esperado. ' +
+          'Verifique sua conexão e a janela do questionário e tente salvar novamente.'
+        );
+      }, LIMITE_ENVIO_MS);
+
     }
     catch (e) {
 
@@ -835,6 +849,11 @@
           'DELPHI_AUDIO_ERRO'
       ) {
         return;
+      }
+
+      if (timeoutEnvio) {
+        clearTimeout(timeoutEnvio);
+        timeoutEnvio = null;
       }
 
       btnEnviar.disabled = false;
